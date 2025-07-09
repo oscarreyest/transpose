@@ -55,11 +55,9 @@
   <div class="controls">
     <label for="originalKey">Original Key:</label>
     <select id="originalKey"></select>
-    <button onclick="detectKey()">Detect Key</button>
 
     <label for="targetKey">Target Key:</label>
     <select id="targetKey"></select>
-    <button onclick="suggestKeys()">Suggest Keys</button>
 
     <label><input type="checkbox" id="nashvilleMode" /> Nashville Numbers</label>
 
@@ -192,46 +190,6 @@
         }
       });
       doc.save("transposed_chart.pdf");
-    }
-
-    function detectKey() {
-      const input = document.getElementById("inputText").value;
-      const matches = input.match(chordRegex) || [];
-      const majorCounts = {};
-      const minorCounts = {};
-
-      matches.forEach((match) => {
-        const root = match.match(/^([A-G][b#]?)/);
-        const suffix = match.slice((root ? root[0].length : 0)).toLowerCase();
-        const isMinor = /m(?!aj)/.test(suffix);
-
-        const chord = normalizeChord(root ? root[0] : '');
-        if (!chord) return;
-
-        if (isMinor) {
-          minorCounts[chord + 'm'] = (minorCounts[chord + 'm'] || 0) + 1;
-        } else {
-          majorCounts[chord] = (majorCounts[chord] || 0) + 1;
-        }
-      });
-
-      const bestMajor = Object.entries(majorCounts).sort((a, b) => b[1] - a[1])[0];
-      const bestMinor = Object.entries(minorCounts).sort((a, b) => b[1] - a[1])[0];
-
-      if ((bestMinor?.[1] || 0) > (bestMajor?.[1] || 0)) {
-        originalKeySelect.value = bestMinor[0];
-        alert(`Detected minor key: ${bestMinor[0]}`);
-      } else if (bestMajor) {
-        originalKeySelect.value = bestMajor[0];
-        alert(`Detected major key: ${bestMajor[0]}`);
-      } else {
-        alert("Could not detect key reliably.");
-      }
-    }
-
-    function suggestKeys() {
-      const vocalFriendlyKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'Am', 'Em'];
-      alert("Suggested keys for common vocal ranges: " + vocalFriendlyKeys.join(", "));
     }
   </script>
 </body>
