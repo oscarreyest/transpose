@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Advanced Song Chart Transposer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      max-width: 900px;
+      margin: auto;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: monospace;
+      margin-bottom: 1rem;
+      white-space: pre;
+    }
+    select,
+    button,
+    label {
+      margin: 10px 5px 10px 0;
+      padding: 0.5rem;
+    }
+    .controls {
+      margin-bottom: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    #preview {
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      white-space: pre-wrap;
+      font-family: monospace;
+      display: none;
+    }
+    .hidden {
+      display: none;
+    }
+    @media (max-width: 600px) {
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Advanced Song Chart Transposer</h1>
+
+  <div class="controls">
+    <label for="originalKey">Original Key:</label>
+    <select id="originalKey"></select>
+    <button onclick="detectKey()">Detect Key</button>
+
+    <label for="targetKey">Target Key:</label>
+    <select id="targetKey"></select>
+    <button onclick="suggestKeys()">Suggest Keys</button>
+
+    <label><input type="checkbox" id="nashvilleMode" /> Nashville Numbers</label>
+
+    <button onclick="transposeChart()">Transpose</button>
+    <button onclick="togglePreview()">Toggle Preview</button>
+    <button onclick="downloadChart()">Download TXT</button>
+    <button onclick="downloadPDF()">Download PDF</button>
+  </div>
+
+  <textarea id="inputText" placeholder="Paste your chord chart here..."></textarea>
+  <textarea id="outputText" readonly placeholder="Transposed chart will appear here..."></textarea>
+
+  <div id="preview" class="hidden"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const keys = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+    const minorKeys = ['Am', 'A#m', 'Bm', 'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m'];
+    const enharmonics = { Db: 'C#', D#: 'Eb', Gb: 'F#', G#: 'Ab', A#: 'Bb' };
+    const nashvilleNumbers = ['1', 'b2', '2', 'b3', '3', '4', '#4', '5', 'b6', '6', 'b7', '7'];
+    const chordRegex = /\b([A-G][b#]?)([a-z0-9#]*)\b/g;
+
+    const originalKeySelect = document.getElementById("originalKey");
+    const targetKeySelect = document.getElementById("targetKey");
+    const nashvilleCheckbox = document.getElementById("nashvilleMode");
+
+    keys.concat(minorKeys).forEach((key) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = key;
+      originalKeySelect.appendChild(option.cloneNode(true));
+      targetKeySelect.appendChild(option);
+    });
+
+    function normalizeChord(chord) {
+      return enharmonics[chord] || chord;
+    }
+
+    function chordToNashville(chord, originalKey) {
+      const root = chord.match(/[A-G][b#]?/);
+      if (!root) return chord;
+      const index = keys.indexOf(normalizeChord(root[0]));
+      const keyIndex = keys.indexOf(normalizeChord(originalKey));
+      const nashville = nashvilleNumbers[(index - keyIndex + 12) % 12];
+      return chord.replace(root[0], nashville);
+    }
+
+    function transposeChord(chord, steps) {
+      const baseMatch = chord.match(/^([A-G][b#]?)([^\/]*)(\/[A-G][b#]?)?/);
+      if (!baseMatch) return chord;
+
+      const base = baseMatch[1];
+      const modifier = baseMatch[2] || '';
+      const slash = baseMatch[3] || '';
+
+      let index = keys.indexOf(normalizeChord(base));
+      if (index === -1) return chord;
+      let newIndex = (index + steps + 12) % 12;
+
+      let transposedChord = keys[newIndex] + modifier;
+
+      if (slash) {
+        const bassNote = slash.slice(1);
+        let bassIndex = keys.indexOf(normalizeChord(bassNote));
+        if (bassIndex !== -1) {
+          let newBassIndex = (bassIndex + steps + 12) % 12;
+          transposedChord += '/' + keys[newBassIndex];
+        } else {
+          transposedChord += slash;
+        }
+      }
+
+      return transposedChord;
+    }
+
+    function transposeChart() {
+      const originalKey = originalKeySelect.value.replace('m', '');
+      const targetKey = targetKeySelect.value.replace('m', '');
+      const useNashville = nashvilleCheckbox.checked;
+      const steps = keys.indexOf(targetKey) - keys.indexOf(originalKey);
+
+      const input = document.getElementById("inputText").value;
+      const lines = input.split("\n");
+
+      const outputLines = lines.map((line) => {
+        return line.replace(chordRegex, (match, root, modifier) => {
+          return useNashville
+            ? chordToNashville(match, originalKey)
+            : transposeChord(match, steps);
+        });
+      });
+
+      const result = outputLines.join("\n");
+      document.getElementById("outputText").value = result;
+      document.getElementById("preview").innerText = result;
+    }
+
+    function togglePreview() {
+      document.getElementById("preview").classList.toggle("hidden");
+    }
+
+    function downloadChart() {
+      const output = document.getElementById("outputText").value;
+      const blob = new Blob([output], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "transposed_chart.txt";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadPDF() {
+      const output = document.getElementById("outputText").value;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+      doc.setFont("Courier", "normal");
+      doc.setFontSize(12);
+      const lines = output.split("\n");
+      let y = 40;
+      doc.text("Transposed Chart", 40, 25);
+      lines.forEach((line) => {
+        doc.text(line, 40, y);
+        y += 16;
+        if (y > 800) {
+          doc.addPage();
+          y = 40;
+        }
+      });
+      doc.save("transposed_chart.pdf");
+    }
+
+    function detectKey() {
+      const input = document.getElementById("inputText").value;
+      const matches = input.match(chordRegex) || [];
+      const majorCounts = {};
+      const minorCounts = {};
+
+      matches.forEach((match) => {
+        const root = match.match(/^([A-G][b#]?)/);
+        const suffix = match.slice((root ? root[0].length : 0)).toLowerCase();
+        const isMinor = /m(?!aj)/.test(suffix);
+
+        const chord = normalizeChord(root ? root[0] : '');
+        if (!chord) return;
+
+        if (isMinor) {
+          minorCounts[chord + 'm'] = (minorCounts[chord + 'm'] || 0) + 1;
+        } else {
+          majorCounts[chord] = (majorCounts[chord] || 0) + 1;
+        }
+      });
+
+      const bestMajor = Object.entries(majorCounts).sort((a, b) => b[1] - a[1])[0];
+      const bestMinor = Object.entries(minorCounts).sort((a, b) => b[1] - a[1])[0];
+
+      if ((bestMinor?.[1] || 0) > (bestMajor?.[1] || 0)) {
+        originalKeySelect.value = bestMinor[0];
+        alert(`Detected minor key: ${bestMinor[0]}`);
+      } else if (bestMajor) {
+        originalKeySelect.value = bestMajor[0];
+        alert(`Detected major key: ${bestMajor[0]}`);
+      } else {
+        alert("Could not detect key reliably.");
+      }
+    }
+
+    function suggestKeys() {
+      const vocalFriendlyKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'Am', 'Em'];
+      alert("Suggested keys for common vocal ranges: " + vocalFriendlyKeys.join(", "));
+    }
+  </script>
+</body>
+</html>
